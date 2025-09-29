@@ -1,0 +1,60 @@
+name: Build Pynini Wheel
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-macos-wheel:
+    runs-on: macos-latest
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v3
+
+    - name: Setup Python 3.12
+      uses: actions/setup-python@v4
+      with:
+        python-version: 3.12
+
+    - name: Install build tools
+      run: |
+        python -m pip install --upgrade pip
+        python -m pip install setuptools wheel cython
+
+    - name: Download and build OpenFst 1.8.3
+      run: |
+        curl -LO http://www.openfst.org/twiki/pub/FST/FstDownload/openfst-1.8.3.tar.gz
+        tar xzf openfst-1.8.3.tar.gz
+        cd openfst-1.8.3
+        ./configure --prefix=$HOME/openfst \
+                    --enable-shared \
+                    --enable-static=no \
+                    --enable-bin \
+                    --enable-far \
+                    CC=/usr/bin/clang \
+                    CXX=/usr/bin/clang++
+        make -j$(sysctl -n hw.ncpu)
+        make install
+
+    - name: Set environment variables
+      run: |
+        echo "C_INCLUDE_PATH=$HOME/openfst/include" >> $GITHUB_ENV
+        echo "CPLUS_INCLUDE_PATH=$HOME/openfst/include" >> $GITHUB_ENV
+        echo "LIBRARY_PATH=$HOME/openfst/lib" >> $GITHUB_ENV
+        echo "LD_LIBRARY_PATH=$HOME/openfst/lib" >> $GITHUB_ENV
+
+    - name: Clone Pynini 2.1.6
+      run: |
+        git clone --branch v2.1.6 https://github.com/kylebgorman/pynini.git /tmp/pynini
+        cd /tmp/pynini
+
+    - name: Build wheel
+      run: |
+        cd /tmp/pynini
+        python setup.py bdist_wheel
+
+    - name: Upload wheel
+      uses: actions/upload-artifact@v3
+      with:
+        name: pynini-wheel
+        path: /tmp/pynini/dist/*.whl
