@@ -54,7 +54,7 @@ jobs:
         python setup.py bdist_wheel
 
     - name: Upload wheel
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: pynini-wheel
         path: /tmp/pynini/dist/*.whl
