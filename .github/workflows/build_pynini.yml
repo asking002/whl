@@ -1,4 +1,4 @@
-name: Build Pynini Wheel
+name: Build Pynini Wheel for macOS
 
 on:
   workflow_dispatch:
@@ -9,55 +9,112 @@ jobs:
 
     steps:
     - name: Checkout
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
 
     - name: Setup Python 3.12
       uses: actions/setup-python@v4
       with:
         python-version: 3.12
 
-    - name: Install build tools
+    - name: Install build tools and dependencies
       run: |
         python -m pip install --upgrade pip
-        python -m pip install setuptools wheel cython
+        python -m pip install setuptools wheel cython build
+        # 安装其他构建依赖
+        brew install automake libtool
 
-    - name: Download and build OpenFst 1.8.3
+    - name: Extract and build OpenFst 1.8.3
       run: |
-        # curl -LO http://www.openfst.org/twiki/pub/FST/FstDownload/openfst-1.8.3.tar.gz
-        # ls -lh openfst-1.8.3.tar.gz
+        # 解压预下载的 OpenFst
         tar xzf .github/workflows/openfst-1.8.3.tar.gz
         cd openfst-1.8.3
+        
+        # 应用编译修复补丁
         sed -i '' 's/table.s_/selector_/g' src/include/fst/bi-table.h
         sed -i '' 's/selector_(table.s_)/selector_(table.selector_)/g' src/include/fst/bi-table.h
+        
+        # 配置 OpenFst 启用所有必要扩展
         ./configure --prefix=$HOME/openfst \
                     --enable-shared \
                     --enable-static=no \
                     --enable-bin \
                     --enable-far \
+                    --enable-mpdt \
+                    --enable-pdt \
+                    --enable-ngram \
+                    --enable-linear \
                     CC=/usr/bin/clang \
                     CXX=/usr/bin/clang++
+        
+        # 编译和安装
         make -j$(sysctl -n hw.ncpu)
         make install
 
-    - name: Set environment variables
+    - name: Set build environment
       run: |
+        # 设置 macOS 部署目标以确保兼容性
+        echo "MACOSX_DEPLOYMENT_TARGET=11.0" >> $GITHUB_ENV
+        # OpenFst 头文件和库路径
         echo "C_INCLUDE_PATH=$HOME/openfst/include" >> $GITHUB_ENV
         echo "CPLUS_INCLUDE_PATH=$HOME/openfst/include" >> $GITHUB_ENV
         echo "LIBRARY_PATH=$HOME/openfst/lib" >> $GITHUB_ENV
         echo "LD_LIBRARY_PATH=$HOME/openfst/lib" >> $GITHUB_ENV
+        # 编译和链接标志
+        echo "LDFLAGS=-L$HOME/openfst/lib" >> $GITHUB_ENV
+        echo "CPPFLAGS=-I$HOME/openfst/include" >> $GITHUB_ENV
+        # PKG_CONFIG 路径
+        echo "PKG_CONFIG_PATH=$HOME/openfst/lib/pkgconfig" >> $GITHUB_ENV
+
+    - name: Verify OpenFst installation
+      run: |
+        echo "检查 OpenFst 安装..."
+        ls -la $HOME/openfst/include/fst/
+        ls -la $HOME/openfst/lib/
+        # 验证关键头文件是否存在
+        if [ -f "$HOME/openfst/include/fst/extensions/mpdt/compose.h" ]; then
+          echo "✓ mpdt/compose.h 存在"
+        else
+          echo "✗ mpdt/compose.h 缺失"
+          find $HOME/openfst/include -name "*mpdt*" | head -10
+        fi
 
     - name: Clone Pynini 2.1.6
       run: |
-        git clone --branch v2.1.6 https://github.com/kylebgorman/pynini.git /tmp/pynini
-        cd /tmp/pynini
+        git clone --branch v2.1.6 --depth 1 https://github.com/kylebgorman/pynini.git /tmp/pynini
 
-    - name: Build wheel
+    - name: Build Pynini wheel
       run: |
         cd /tmp/pynini
-        python setup.py bdist_wheel
+        # 使用 build 工具构建 wheel
+        python -m build --wheel
+        # 检查生成的 wheel 文件
+        ls -la dist/
 
-    - name: Upload wheel
+    - name: Test wheel installation
+      run: |
+        # 测试 wheel 是否可以安装
+        cd /tmp/pynini
+        WHEEL_FILE=$(ls dist/*.whl | head -1)
+        echo "测试安装: $WHEEL_FILE"
+        python -m pip install --force-reinstall $WHEEL_FILE
+        
+        # 简单的导入测试
+        python -c "import pywrapfst; print('✓ pywrapfst 导入成功')"
+        python -c "import pynini; print('✓ pynini 导入成功')"
+
+    - name: Upload wheel artifact
       uses: actions/upload-artifact@v4
       with:
-        name: pynini-wheel
+        name: pynini-macos-wheel
         path: /tmp/pynini/dist/*.whl
+        retention-days: 7
+
+    - name: Upload build logs
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: build-logs
+        path: |
+          /tmp/pynini/build/
+          /tmp/pynini/*.log
+        retention-days: 3
