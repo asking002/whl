@@ -24,7 +24,7 @@ jobs:
     - name: Download and build OpenFst 1.8.3
       run: |
         # curl -L -O http://www.openfst.org/twiki/pub/FST/FstDownload/openfst-1.8.3.tar.gz
-        curl -L -O https://www.openfst.org/twiki/pub/FST/FstDownload/openfst-1.8.3.tar.gz
+        wget http://www.openfst.org/twiki/pub/FST/FstDownload/openfst-1.8.3.tar.gz --no-check-certificate
         tar xzf openfst-1.8.3.tar.gz
         cd openfst-1.8.3
         ./configure --prefix=$HOME/openfst \
