@@ -25,7 +25,7 @@ jobs:
       run: |
         # curl -LO http://www.openfst.org/twiki/pub/FST/FstDownload/openfst-1.8.3.tar.gz
         # ls -lh openfst-1.8.3.tar.gz
-        tar xzf .github/workflows/openfst-1.8.3.tar.gz
+        tar xzf .github/workflows/openfst-1.8.1.tar.gz
         cd openfst-1.8.3
         ./configure --prefix=$HOME/openfst \
                     --enable-shared \
