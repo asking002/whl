@@ -21,12 +21,14 @@ jobs:
         python -m pip install --upgrade pip
         python -m pip install setuptools wheel cython
 
-    - name: Download and build OpenFst 1.8.1
+    - name: Download and build OpenFst 1.8.3
       run: |
         # curl -LO http://www.openfst.org/twiki/pub/FST/FstDownload/openfst-1.8.3.tar.gz
         # ls -lh openfst-1.8.3.tar.gz
-        tar xzf .github/workflows/openfst-1.8.1.tar.gz
-        cd openfst-1.8.1
+        tar xzf .github/workflows/openfst-1.8.3.tar.gz
+        cd openfst-1.8.3
+        sed -i '' 's/table.s_/selector_/g' src/include/fst/bi-table.h
+        sed -i '' 's/selector_(table.s_)/selector_(table.selector_)/g' src/include/fst/bi-table.h
         ./configure --prefix=$HOME/openfst \
                     --enable-shared \
                     --enable-static=no \
